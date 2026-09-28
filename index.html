@@ -250,11 +250,16 @@
   Object.defineProperty(window.google.script, 'run', {
     get: function () {
       var _thanhCong = null, _thatBai = null;
+      var proxy; // khai báo trước để 2 hàm bên dưới tham chiếu được tới chính proxy
       var chain = {
-        withSuccessHandler: function (fn) { _thanhCong = fn; return chain; },
-        withFailureHandler: function (fn) { _thatBai = fn; return chain; }
+        // QUAN TRỌNG: phải trả về `proxy` (chính nó, đã bọc Proxy), KHÔNG được trả về `chain`
+        // (object gốc chưa bọc) — nếu không, lệnh gọi cuối cùng trong chuỗi (VD: .apiGetBootstrap())
+        // sẽ gọi thẳng lên object gốc (không có hàm apiXxx nào cả) và lỗi âm thầm, khiến trang
+        // treo mãi ở "Đang tải..." mà không có bất kỳ thông báo lỗi nào hiện ra.
+        withSuccessHandler: function (fn) { _thanhCong = fn; return proxy; },
+        withFailureHandler: function (fn) { _thatBai = fn; return proxy; }
       };
-      return new Proxy(chain, {
+      proxy = new Proxy(chain, {
         get: function (target, ten) {
           if (ten in target) return target[ten];
           return function () {
@@ -265,6 +270,7 @@
           };
         }
       });
+      return proxy;
     }
   });
 
