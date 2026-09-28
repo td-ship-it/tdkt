@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+    :root {
+      --primary: #1F4E78;
+      --primary-light: #2E75B6;
+      --bg: #F5F7FA;
+      --ok: #C6E0B4;
+      --ok-text: #1E4620;
+      --warn: #F8CBAD;
+      --warn-text: #7A2E00;
+      --border: #D9E2F3;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: Arial, "Segoe UI", sans-serif;
+      margin: 0; background: var(--bg); color: #222;
+    }
+    .app-shell { display: flex; min-height: 100vh; }
+
+    .sidebar {
+      width: 240px; flex-shrink: 0; background: var(--primary); color: #fff;
+      display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh;
+    }
+    .sidebar-header {
+      padding: 20px 18px; font-size: 16px; font-weight: bold; line-height: 1.5;
+      border-bottom: 1px solid rgba(255,255,255,0.15);
+    }
+    .sidebar-nav { flex: 1; padding: 10px 0; overflow-y: auto; }
+    .sidebar-nav button {
+      display: block; width: 100%; text-align: left; background: transparent; border: none;
+      color: #fff; padding: 12px 20px; cursor: pointer; font-size: 13.5px;
+      border-left: 3px solid transparent; opacity: 0.85;
+    }
+    .sidebar-nav button:hover { background: rgba(255,255,255,0.08); opacity: 1; }
+    .sidebar-nav button.active {
+      background: rgba(255,255,255,0.14); border-left: 3px solid #FFC107;
+      font-weight: bold; opacity: 1;
+    }
+    .sidebar-footer {
+      padding: 14px 18px; font-size: 11.5px; opacity: 0.85;
+      border-top: 1px solid rgba(255,255,255,0.15);
+    }
+
+    .main-area { flex: 1; min-width: 0; }
+    .mobile-topbar { display: none; }
+
+    main { padding: 18px; max-width: 1300px; }
+
+    /* ==== Responsive: man hinh nho (dien thoai/tablet doc) chuyen sidebar thanh menu thu gon ==== */
+    @media (max-width: 820px) {
+      .app-shell { flex-direction: column; }
+      .sidebar {
+        position: fixed; left: 0; top: 0; height: 100vh; z-index: 50; width: 240px;
+        transform: translateX(-100%); transition: transform 0.2s ease;
+      }
+      .sidebar.open { transform: translateX(0); box-shadow: 2px 0 10px rgba(0,0,0,0.3); }
+      .main-area { width: 100%; }
+      .mobile-topbar {
+        display: flex; align-items: center; gap: 12px; background: var(--primary); color: #fff;
+        padding: 12px 16px; font-size: 15px; font-weight: bold; position: sticky; top: 0; z-index: 40;
+      }
+      .mobile-topbar button {
+        background: rgba(255,255,255,0.15); border: none; color: #fff; font-size: 18px;
+        width: 34px; height: 34px; border-radius: 6px; cursor: pointer;
+      }
+      main { padding: 14px; }
+    }
+
+    .card {
+      background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .card h2 { margin-top: 0; font-size: 16px; color: var(--primary); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; }
+    th { background: var(--border); }
+    .status-ok { background: var(--ok); color: var(--ok-text); font-weight: bold; padding: 2px 6px; border-radius: 4px; }
+    .status-warn { background: var(--warn); color: var(--warn-text); font-weight: bold; padding: 2px 6px; border-radius: 4px; }
+    .clickable-row { cursor: pointer; transition: background 0.15s; }
+    .clickable-row:hover { background: #EAF1FB; }
+    .row-selected { background: #FFF3CD !important; font-weight: bold; }
+    form.inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-bottom: 12px; }
+    form.inline label { display: flex; flex-direction: column; font-size: 12px; color: #555; }
+    input, select, textarea {
+      padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; font-family: inherit;
+    }
+    button.btn {
+      background: var(--primary-light); color: #fff; border: none; padding: 8px 16px;
+      border-radius: 4px; cursor: pointer; font-size: 13px;
+      transition: transform 0.08s ease, opacity 0.15s ease;
+    }
+    button.btn:hover { background: var(--primary); }
+    button.btn:active { transform: scale(0.96); } /* phản hồi ngay lập tức khi bấm, dù chưa xử lý xong */
+    button.btn:disabled { opacity: 0.65; cursor: wait; transform: none; }
+    /* Trạng thái "Đang xử lý..." — thay chữ trong nút thành vòng xoay, báo rõ hệ thống đang làm việc */
+    button.btn.btn-loading { position: relative; color: transparent !important; pointer-events: none; }
+    button.btn.btn-loading::after {
+      content: ''; position: absolute; left: 50%; top: 50%; width: 14px; height: 14px;
+      margin: -7px 0 0 -7px; border: 2px solid rgba(255,255,255,0.45); border-top-color: #fff;
+      border-radius: 50%; animation: btn-spin 0.6s linear infinite;
+    }
+    @keyframes btn-spin { to { transform: rotate(360deg); } }
+    .msg { padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; font-size: 13px; }
+    .msg.error { background: #F8CBAD; color: #7A2E00; }
+    .msg.success { background: #C6E0B4; color: #1E4620; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 700px) { .grid-2 { grid-template-columns: 1fr; } }
+    .no-access { text-align: center; padding: 40px; color: #888; }
+    .badge { font-size: 11px; background: var(--border); padding: 2px 8px; border-radius: 10px; margin-left: 6px; }
+    .sample-banner {
+      background: #FFF3CD; color: #7A4A00; border-bottom: 2px solid #E0A800;
+      padding: 10px 20px; font-size: 13px; text-align: center;
+    }
+    .sample-banner b { color: #C0392B; }
+
+    /* ==== Hộc trượt (drawer) chi tiết cá nhân — mở từ bên phải ==== */
+    .drawer-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+      opacity: 0; visibility: hidden; transition: opacity 0.2s ease; z-index: 90;
+    }
+    .drawer-overlay.open { opacity: 1; visibility: visible; }
+    .drawer-panel {
+      position: fixed; top: 0; right: 0; height: 100vh; width: 480px; max-width: 92vw;
+      background: #fff; box-shadow: -4px 0 16px rgba(0,0,0,0.2); z-index: 91;
+      transform: translateX(100%); transition: transform 0.25s ease;
+      display: flex; flex-direction: column;
+    }
+    .drawer-panel.open { transform: translateX(0); }
+    .drawer-header {
+      background: var(--primary); color: #fff; padding: 16px 18px;
+      display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
+    }
+    .drawer-header #drawer-title { font-size: 15px; font-weight: bold; }
+    .drawer-close {
+      background: rgba(255,255,255,0.15); border: none; color: #fff; width: 30px; height: 30px;
+      border-radius: 6px; cursor: pointer; font-size: 15px;
+    }
+    .drawer-body { flex: 1; overflow-y: auto; padding: 18px; }
+    .drawer-body table { width: 100%; font-size: 12.5px; }
+    .drawer-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+    .drawer-stat-box { background: var(--bg); border-radius: 6px; padding: 10px 12px; text-align: center; }
+    .drawer-stat-box .num { font-size: 20px; font-weight: bold; color: var(--primary); }
+    .drawer-stat-box .lbl { font-size: 11px; color: #666; }
+    .clickable-cell { cursor: pointer; }
+    .clickable-cell:hover { text-decoration: underline; color: var(--primary-light); }
+
+    /* ==== Modal đăng nhập Quản trị ==== */
+    .login-overlay {
+      position: fixed; inset: 0; background: rgba(15,30,50,0.55); backdrop-filter: blur(1px);
+      display: none; align-items: center; justify-content: center; z-index: 95;
+    }
+    .login-overlay.open { display: flex; }
+    .login-modal {
+      background: #fff; border-radius: 10px; padding: 26px 28px; width: 340px; max-width: 90vw;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+    .login-modal-header { font-size: 16px; font-weight: bold; color: var(--primary); margin-bottom: 6px; }
+    .login-modal-desc { font-size: 12.5px; color: #666; margin: 0 0 16px; }
+    .login-pw-input {
+      width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 6px;
+      font-size: 14px; box-sizing: border-box;
+    }
+    .login-pw-input:focus { outline: none; border-color: var(--primary-light); }
+    .login-error { color: #C0392B; font-size: 12px; min-height: 16px; margin-top: 8px; }
+    .login-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      ⭐ Hệ thống TĐKT<br><span style="font-weight:normal;font-size:12px;opacity:0.85">ĐHYD TP.HCM</span>
+    </div>
+    <nav id="navbar" class="sidebar-nav"></nav>
+    <div class="sidebar-footer" id="sidebar-footer"></div>
+  </aside>
+  <div class="main-area">
+    <div class="mobile-topbar">
+      <button id="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+      <span>⭐ Hệ thống TĐKT</span>
+    </div>
+    <div id="sample-data-banner"></div>
+    <main id="app-content">
+      <div class="card"><p>Đang tải...</p></div>
+    </main>
+  </div>
+</div>
+
+<div id="drawer-overlay" class="drawer-overlay" onclick="closeCaNhanDrawer()"></div>
+<div id="drawer-panel" class="drawer-panel">
+  <div class="drawer-header">
+    <div id="drawer-title">Chi tiết cá nhân</div>
+    <button class="drawer-close" onclick="closeCaNhanDrawer()">✕</button>
+  </div>
+  <div id="drawer-body" class="drawer-body"><p style="color:#888;font-size:13px">Đang tải...</p></div>
+</div>
+
+<div id="login-overlay" class="login-overlay">
+  <div class="login-modal">
+    <div class="login-modal-header">🔒 Đăng nhập Quản trị</div>
+    <p class="login-modal-desc">Nhập mật khẩu quản trị để mở khóa các phân hệ quản lý dữ liệu.</p>
+    <input type="password" id="login-pw-input" class="login-pw-input" placeholder="Mật khẩu"
+      onkeydown="if(event.key==='Enter')xacNhanDangNhapAdmin();if(event.key==='Escape')dongModalDangNhap();">
+    <div id="login-error" class="login-error"></div>
+    <div class="login-modal-actions">
+      <button class="btn btn-local" style="background:#999" onclick="dongModalDangNhap()">Hủy</button>
+      <button class="btn" onclick="xacNhanDangNhapAdmin()">Đăng nhập</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ====== CẤU HÌNH GỌI VỀ APPS SCRIPT (giao diện chạy tách rời trên Cloudflare Pages) ======
+  // Dán URL "Web app" đã Deploy của Apps Script vào đây (Deploy > Manage deployments > Web app URL),
+  // dạng: https://script.google.com/macros/s/XXXXXXXXXXXX/exec
+  var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbygdmvoKrXkpoCMX87JirWO_gSz_hsGuD2phL9HGApgd4huqIF0IJ90Y7e1K-yiqXUanw/exec';
+
+  var ADMIN_TOKEN_KEY = 'tdkt_admin_token';
+  function getAdminToken_() {
+    try { return sessionStorage.getItem(ADMIN_TOKEN_KEY) || null; } catch (e) { return null; }
+  }
+
+  // Gọi 1 hàm apiXxx trên Apps Script qua fetch(). Dùng Content-Type: text/plain để
+  // trình duyệt coi đây là "simple request" (không gửi preflight OPTIONS trước) —
+  // vì Apps Script Web App KHÔNG xử lý được request OPTIONS, nếu để trình duyệt gửi
+  // preflight thì mọi lệnh gọi sẽ bị chặn bởi CORS ngay từ vòng đầu.
+  function callAppsScript_(fnName, args) {
+    return fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ fn: fnName, args: args, adminToken: getAdminToken_() })
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (json) {
+        if (!json || !json.ok) { throw new Error((json && json.error) || 'Lỗi không xác định từ máy chủ.'); }
+        return json.data;
+      });
+  }
+
+  // Giả lập lại đúng cú pháp google.script.run.withSuccessHandler(...).withFailureHandler(...).apiXxx(...)
+  // để KHÔNG phải sửa lại từng lệnh gọi cũ trong file này — chỉ thay "đường ống" phía dưới từ
+  // cầu nối nội bộ Apps Script (google.script.run) sang fetch() gọi doPost() qua mạng.
+  window.google = window.google || {};
+  window.google.script = window.google.script || {};
+  Object.defineProperty(window.google.script, 'run', {
+    get: function () {
+      var _thanhCong = null, _thatBai = null;
+      var chain = {
+        withSuccessHandler: function (fn) { _thanhCong = fn; return chain; },
+        withFailureHandler: function (fn) { _thatBai = fn; return chain; }
+      };
+      return new Proxy(chain, {
+        get: function (target, ten) {
+          if (ten in target) return target[ten];
+          return function () {
+            var args = Array.prototype.slice.call(arguments);
+            callAppsScript_(ten, args)
+              .then(function (data) { if (_thanhCong) _thanhCong(data); })
+              .catch(function (err) { if (_thatBai) _thatBai(err); else console.error(err); });
+          };
+        }
+      });
+    }
+  });
+
+  // ====== DỮ LIỆU KHỞI ĐỘNG (trước đây nhúng sẵn qua scriptlet GAS, nay lấy qua fetch()) ======
+  var CURRENT_USER = { email: '', hoTen: '', donVi: '', vaiTro: null, maNV: '' };
+  var COMPLETION_LEVELS = [];
+  var DANHHIEU_CN_GROUPS = [];
+  var DANHHIEU_TT_GROUPS = [];
+  var NOI_BAN_HANH = [];
+  var PHAM_VI = [];
+
+  var canEdit = false, canViewAll = false, PAGES = [];
+  var adminUnlocked = false;
+  try { adminUnlocked = sessionStorage.getItem('tdkt_admin_unlocked') === '1'; } catch (e) {}
+
+  // ====== ĐIỀU HƯỚNG & PHÂN QUYỀN (tính lại mỗi khi mở khóa/khóa Quản trị) ======
+  function rebuildAccessState() {
+    // THEO YÊU CẦU: mật khẩu Quản trị là điều kiện DUY NHẤT để hiện các tab quản trị trên
+    // GIAO DIỆN — bất kể tài khoản Google đang mở link có vai trò gì trong sheet NguoiDung.
+    // Mọi người (kể cả Admin đã đăng ký) đều thấy CHỈ tab "Tìm kiếm" cho tới khi nhập đúng
+    // mật khẩu. Quyền GHI dữ liệu thật (Thêm/Sửa/Xóa) vẫn được backend kiểm tra độc lập theo
+    // đúng tài khoản Google đã đăng ký vai trò — không đổi, vẫn an toàn 2 lớp.
+    canEdit = adminUnlocked;
+    canViewAll = adminUnlocked;
+
+    PAGES = [{ id: 'timkiem', label: '🔍 Tìm kiếm' }];
+    if (adminUnlocked) {
+      if (CURRENT_USER.maNV) PAGES.push({ id: 'dashboard', label: 'Dashboard cá nhân' });
+      PAGES.push({ id: 'donvi', label: 'Danh mục đơn vị' });
+      PAGES.push({ id: 'canhan', label: 'Danh sách cá nhân' });
+      PAGES.push({ id: 'thanhtichcn', label: 'Thành tích cá nhân' });
+      PAGES.push({ id: 'thanhtichtt', label: 'Thành tích tập thể' });
+      PAGES.push({ id: 'sangkien', label: 'Sáng kiến / Đề tài' });
+      PAGES.push({ id: 'tonghop', label: 'Tổng hợp toàn trường' });
+    }
+    renderNav();
+    renderSidebarFooter();
+  }
+
+  function renderSidebarFooter() {
+    var box = document.getElementById('sidebar-footer');
+    if (adminUnlocked) {
+      var teen = CURRENT_USER.vaiTro
+        ? esc(CURRENT_USER.hoTen || CURRENT_USER.email) + ' — Vai trò: <b>' + esc(CURRENT_USER.vaiTro) + '</b>'
+        : 'Đã mở khóa bằng mật khẩu';
+      box.innerHTML = '🔓 ' + teen + '<br>' +
+        '<a href="#" onclick="dangXuatAdmin();return false;" style="color:#FFD966">Khóa lại</a>';
+    } else {
+      box.innerHTML = 'Khách (chưa đăng nhập)<br>' +
+        '<a href="#" onclick="promptAdminLogin();return false;" style="color:#FFD966">🔒 Đăng nhập Quản trị</a>';
+    }
+  }
+
+  function promptAdminLogin() {
+    document.getElementById('login-error').textContent = '';
+    document.getElementById('login-pw-input').value = '';
+    document.getElementById('login-overlay').classList.add('open');
+    document.getElementById('login-pw-input').focus();
+  }
+
+  function dongModalDangNhap() {
+    document.getElementById('login-overlay').classList.remove('open');
+  }
+
+  function xacNhanDangNhapAdmin() {
+    var pw = document.getElementById('login-pw-input').value;
+    var errBox = document.getElementById('login-error');
+    var btn = document.querySelector('#login-overlay .login-modal-actions button.btn:not(.btn-local)');
+    errBox.textContent = '';
+    if (!pw) { errBox.textContent = 'Vui lòng nhập mật khẩu.'; ketThucLoading(btn); return; }
+    google.script.run.withSuccessHandler(function (ket) {
+      if (!ket || !ket.ok) { errBox.textContent = 'Sai mật khẩu, hoặc hệ thống chưa đặt mật khẩu Quản trị.'; ketThucLoading(btn); return; }
+      adminUnlocked = true;
+      try {
+        sessionStorage.setItem('tdkt_admin_unlocked', '1');
+        sessionStorage.setItem(ADMIN_TOKEN_KEY, ket.token);
+      } catch (e) {}
+      dongModalDangNhap();
+      rebuildAccessState();
+      goTo(trangMacDinh());
+    }).withFailureHandler(function (err) { errBox.textContent = 'Lỗi: ' + (err.message || err); ketThucLoading(btn); }).apiAdminLoginToken(pw);
+  }
+
+  function dangXuatAdmin() {
+    var token = getAdminToken_();
+    adminUnlocked = false;
+    try {
+      sessionStorage.removeItem('tdkt_admin_unlocked');
+      sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+    } catch (e) {}
+    if (token) { google.script.run.withSuccessHandler(function () {}).withFailureHandler(function () {}).apiAdminLogout(token); }
+    rebuildAccessState();
+    goTo('timkiem');
+  }
+
+  // Trang mặc định khi mở app: khách chưa đăng nhập -> Tìm kiếm; có quyền xem toàn trường -> Tổng hợp;
+  // có liên kết cá nhân -> Dashboard; còn lại -> trang đầu tiên khả dụng.
+  function trangMacDinh() {
+    if (!adminUnlocked) return 'timkiem';
+    if (PAGES.some(function (p) { return p.id === 'tonghop'; })) return 'tonghop';
+    if (CURRENT_USER.maNV && PAGES.some(function (p) { return p.id === 'dashboard'; })) return 'dashboard';
+    return PAGES.length ? PAGES[0].id : 'timkiem';
+  }
+
+  function renderNav() {
+    var nav = document.getElementById('navbar');
+    nav.innerHTML = PAGES.map(function (p) {
+      return '<button data-page="' + p.id + '" onclick="goTo(\'' + p.id + '\')">' + p.label + '</button>';
+    }).join('');
+  }
+
+  function setActiveNav(pageId) {
+    document.querySelectorAll('#navbar button').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.page === pageId);
+    });
+  }
+
+  // ====== SIDEBAR DI ĐỘNG (mở/đóng, tự đóng sau khi chọn trang) ======
+  function toggleSidebar() {
+    document.querySelector('.sidebar').classList.toggle('open');
+  }
+  function closeSidebarOnMobile() {
+    if (window.innerWidth <= 820) document.querySelector('.sidebar').classList.remove('open');
+  }
+
+  function goTo(pageId) {
+    setActiveNav(pageId);
+    closeSidebarOnMobile();
+    var content = document.getElementById('app-content');
+    if (!pageId) {
+      content.innerHTML = '<div class="card"><p>Tài khoản của bạn chưa được cấp quyền xem trang nào. Liên hệ Phòng TCCB để được hỗ trợ.</p></div>';
+      return;
+    }
+    content.innerHTML = '<div class="card"><p>Đang tải...</p></div>';
+    if (pageId === 'timkiem') renderTimKiem();
+    else if (pageId === 'dashboard') renderDashboard();
+    else if (pageId === 'donvi') renderDonVi();
+    else if (pageId === 'canhan') renderCaNhan();
+    else if (pageId === 'thanhtichcn') renderThanhTichCN();
+    else if (pageId === 'thanhtichtt') renderThanhTichTT();
+    else if (pageId === 'sangkien') renderSangKien();
+    else if (pageId === 'tonghop') renderTongHop();
+  }
+
+  function esc(s) { return (s === null || s === undefined) ? '' : String(s).replace(/</g, '&lt;'); }
+  // Hiển thị "yyyy-MM-dd" (từ backend) thành "dd/mm/yyyy" dễ đọc; giữ nguyên nếu không đúng định dạng.
+  function formatDateVN(isoDate) {
+    if (!isoDate) return '';
+    var m = String(isoDate).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? (m[3] + '/' + m[2] + '/' + m[1]) : String(isoDate);
+  }
+  // Tách số năm — chấp nhận cả số sạch (2024) LẪN chữ dạng "2024-2025" (dữ liệu gõ trực tiếp vào Sheet
+  // chưa qua tách năm tự động). Dùng khi cần SO SÁNH/SẮP XẾP theo năm ở phía giao diện.
+  function extractYear(nam) {
+    if (nam === null || nam === undefined || nam === '') return 0;
+    if (typeof nam === 'number' && !isNaN(nam)) return nam;
+    var m = String(nam).match(/\d{4}/);
+    return m ? Number(m[0]) : 0;
+  }
+  // Dựng lại "Năm học" đầy đủ (VD: 2024 -> "2024-2025") từ năm đầu đã lưu, để hiển thị đúng
+  // quy ước năm học VN mà không cần lưu thêm dữ liệu (năm sau luôn = năm đầu + 1).
+  function formatNamHoc(nam) {
+    var n = extractYear(nam);
+    return n ? (n + '-' + (n + 1)) : esc(nam);
+  }
+  // Hiển thị "Không đạt" (dòng chỉ khai báo mức hoàn thành, không có danh hiệu) thành dấu "–"
+  // cho gọn — tránh trông giống "bị trượt danh hiệu". Không đổi giá trị lưu trong Sheet.
+  function formatDanhHieu(dh) {
+    if (!dh || dh === 'Không đạt') return '<span style="color:#bbb">–</span>';
+    return esc(dh);
+  }
+  // Rút gọn nhãn "— Không áp dụng (...) —" ở cột Mức hoàn thành cho các dòng chỉ khai báo
+  // danh hiệu/khen thưởng, để bảng đỡ rối mắt.
+  function formatMucHoanThanh(mht) {
+    if (!mht || mht.indexOf('Không áp dụng') !== -1) return '<span style="color:#bbb">– (không áp dụng)</span>';
+    return esc(mht);
+  }
+  // Hiển thị link minh chứng dạng nút bấm mở tab mới; nếu trống thì hiện dấu "–"
+  function formatLinkMinhChung(link) {
+    if (!link) return '<span style="color:#bbb">–</span>';
+    return '<a href="' + esc(link) + '" target="_blank" rel="noopener" style="color:var(--primary-light)">📎 Xem</a>';
+  }
+  function buildDanhHieuOptGroups(groups) {
+    var html = '<option value="Không đạt">Không đạt</option>';
+    groups.forEach(function (g) {
+      html += '<optgroup label="' + esc(g.nhom) + '">';
+      g.items.forEach(function (i) { html += '<option>' + esc(i) + '</option>'; });
+      html += '</optgroup>';
+    });
+    return html;
+  }
+  function buildNoiBanHanhOpts() {
+    return NOI_BAN_HANH.map(function (n) { return '<option>' + esc(n) + '</option>'; }).join('');
+  }
+  function statusBadge(text) {
+    var ok = String(text).indexOf('✔') !== -1;
+    return '<span class="' + (ok ? 'status-ok' : 'status-warn') + '">' + esc(text) + '</span>';
+  }
+
+  // ====== TRANG: KHÔNG CÓ QUYỀN ======
+  // ====== TRANG: TÌM KIẾM (công khai — không cần đăng nhập) ======
+  function renderTimKiem() {
+    var html = '<div class="card"><h2>🔍 Tra cứu Nhân viên / Đơn vị</h2>' +
+      '<p style="font-size:12.5px;color:#888;margin-top:-6px">Nhập tên, mã nhân viên, hoặc tên đơn vị để xem thông tin và quá trình khen thưởng.</p>' +
+      '<div class="inline">' +
+      '<input id="tk-keyword" placeholder="VD: Nguyễn Văn A, NV101, Bộ môn Dược lý..." style="flex:1;min-width:260px" ' +
+      'onkeydown="if(event.key===\'Enter\')thucHienTimKiem()">' +
+      '<button class="btn" type="button" onclick="thucHienTimKiem()">Tìm kiếm</button>' +
+      '</div>' +
+      '<div id="tk-ketqua" style="margin-top:16px"></div></div>';
+    document.getElementById('app-content').innerHTML = html;
+    var input = document.getElementById('tk-keyword');
+    if (input) input.focus();
+  }
+
+  function thucHienTimKiem() {
+    var kw = val_('tk-keyword');
+    var box = document.getElementById('tk-ketqua');
+    if (!kw || kw.trim().length < 2) {
+      box.innerHTML = '<p style="color:#888;font-size:13px">Nhập ít nhất 2 ký tự để tìm kiếm.</p>';
+      return;
+    }
+    box.innerHTML = '<p style="color:#888;font-size:13px">Đang tìm...</p>';
+    Promise.all([ggsGet('apiSearchCaNhan', kw), ggsGet('apiSearchDonVi', kw)]).then(function (r) {
+      var dsCaNhan = r[0] || [], dsDonVi = r[1] || [];
+      var html = '';
+      if (dsCaNhan.length === 0 && dsDonVi.length === 0) {
+        html = '<p style="color:#888;font-size:13px">Không tìm thấy kết quả nào khớp với "' + esc(kw) + '".</p>';
+      }
+      if (dsCaNhan.length > 0) {
+        html += '<h3 style="font-size:14px;margin-bottom:6px">👤 Nhân viên (' + dsCaNhan.length + ' kết quả)</h3>' +
+          '<table><tr><th>Họ tên</th><th>Đơn vị</th><th>Chức vụ</th></tr>';
+        dsCaNhan.forEach(function (c) {
+          // Lưu ý: KHÔNG hiển thị cột "Mã NV" ở khu vực Tìm kiếm công khai — vì mã này ở một số
+          // đơn vị có thể trùng với số CCCD/định danh cá nhân, không nên lộ công khai cho mọi người.
+          html += '<tr><td class="clickable-cell" onclick="openCaNhanDrawer(\'' + esc(c.MaNV) + '\')">' + esc(c.HoTen) +
+            '</td><td>' + esc(c.DonVi) + '</td><td>' + esc(c.ChucVu) + '</td></tr>';
+        });
+        html += '</table>';
+      }
+      if (dsDonVi.length > 0) {
+        html += '<h3 style="font-size:14px;margin:16px 0 6px">🏢 Đơn vị (' + dsDonVi.length + ' kết quả)</h3>' +
+          '<table><tr><th>Tên đơn vị</th><th>Loại hình</th></tr>';
+        dsDonVi.forEach(function (d) {
+          html += '<tr><td class="clickable-cell" onclick="openDonViDrawer(\'' + esc(d.TenDonVi).replace(/'/g, "\\'") + '\')">' +
+            esc(d.TenDonVi) + '</td><td>' + esc(d.LoaiHinh) + '</td></tr>';
+        });
+        html += '</table>';
+      }
+      box.innerHTML = html;
+    }).catch(function (err) { box.innerHTML = ''; showError(err); });
+  }
+
+  function openDonViDrawer(donVi) {
+    document.getElementById('drawer-overlay').classList.add('open');
+    document.getElementById('drawer-panel').classList.add('open');
+    document.getElementById('drawer-title').textContent = 'Đang tải...';
+    document.getElementById('drawer-body').innerHTML = '<p style="color:#888;font-size:13px">Đang tải...</p>';
+    google.script.run.withSuccessHandler(function (d) {
+      document.getElementById('drawer-title').textContent = d.donVi;
+      var html = '<div class="drawer-stat-grid">' +
+        '<div class="drawer-stat-box"><div class="num">' + d.soNamLDTT + '</div><div class="lbl">Số năm Tập thể LĐTT</div></div>' +
+        '<div class="drawer-stat-box"><div class="num">' + d.soNamLDXS + '</div><div class="lbl">Số năm Tập thể LĐXS</div></div>' +
+        '<div class="drawer-stat-box"><div class="num">' + d.soNamCoBYT + '</div><div class="lbl">Cờ thi đua Bộ Y tế</div></div>' +
+        '<div class="drawer-stat-box"><div class="num">' + d.soNamCoCP + '</div><div class="lbl">Cờ thi đua Chính phủ</div></div>' +
+        '</div>';
+      html += '<h3 style="font-size:13px;margin-bottom:6px">Lịch sử thành tích theo năm</h3>';
+      if (!d.chiTiet || d.chiTiet.length === 0) {
+        html += '<p style="color:#888;font-size:13px">Chưa có dữ liệu thành tích năm nào.</p>';
+      } else {
+        var ds = d.chiTiet.slice().sort(function (a, b) { return Number(b.nam) - Number(a.nam); });
+        html += '<table><tr><th>Năm học</th><th>Mức HTNV</th><th>Danh hiệu/Hình thức</th><th>Tỷ lệ LĐTT</th><th>Minh chứng</th></tr>';
+        ds.forEach(function (c) {
+          var tyLe = c.tyLeLDTT !== null ? Math.round(c.tyLeLDTT * 100) + '%' : '—';
+          html += '<tr><td>' + formatNamHoc(c.nam) + '</td><td>' + formatMucHoanThanh(c.mucHoanThanh) + '</td><td>' + formatDanhHieu(c.danhHieuDat) +
+            '</td><td>' + tyLe + '</td><td>' + formatLinkMinhChung(c.linkMinhChung) + '</td></tr>';
+        });
+        html += '</table>';
+      }
+      document.getElementById('drawer-body').innerHTML = html;
+    }).withFailureHandler(function (err) {
+      document.getElementById('drawer-body').innerHTML = '<p style="color:#C0392B;font-size:13px">Lỗi: ' + esc(err.message || err) + '</p>';
+    }).apiGetTienDoTapThe(donVi);
+  }
+
+  // ====== TRANG: DASHBOARD CÁ NHÂN ======
+  function renderDashboard() {
+    var maNV = CURRENT_USER.maNV;
+    if (!maNV) {
+      document.getElementById('app-content').innerHTML =
+        '<div class="card"><p>Tài khoản của bạn chưa liên kết với hồ sơ cá nhân (MaNV). ' +
+        'Liên hệ Phòng TCCB để liên kết, hoặc dùng menu "Thành tích cá nhân" để tra cứu người khác nếu bạn có quyền.</p></div>';
+      return;
+    }
+    google.script.run.withSuccessHandler(function (d) {
+      var html = '<div class="card"><h2>Lộ trình thi đua — ' + esc(d.hoTen) + ' (' + esc(d.donVi) + ')</h2>';
+      html += '<table><tr><th>Chỉ số</th><th>Giá trị</th></tr>';
+      html += row_('Tổng số năm có dữ liệu', d.tongSoNam);
+      html += row_('Số năm hoàn thành tốt/xuất sắc NV', d.soNamHTTNV);
+      html += row_('Số lần đạt Lao động tiên tiến', d.soLanLDTT);
+      html += row_('Tổng số lần đạt CSTĐ cơ sở', d.tongSoLanCSTD);
+      html += row_('Năm gần nhất có dữ liệu', d.namGanNhat);
+      html += row_('Số năm liên tục HT tốt/XS NV (streak)', d.streakHTTNV);
+      html += row_('Số năm liên tục CSTĐ cơ sở (streak)', d.streakCSTD);
+      html += '</table></div>';
+
+      html += '<div class="card"><h2>Trạng thái từng danh hiệu</h2><table>';
+      html += '<tr><th>Danh hiệu</th><th>Trạng thái</th></tr>';
+      html += '<tr><td>Giấy khen HT — đường (a) hoàn thành tốt/XS NV</td><td>' + statusBadge(d.duongA_GiayKhenHT) + '</td></tr>';
+      html += '<tr><td>Giấy khen HT — đường (b) 3 năm liên tục CSTĐ CS</td><td>' + statusBadge(d.duongB_GiayKhenHT) + '</td></tr>';
+      html += '<tr><td>Chiến sĩ thi đua cơ sở (đã từng đạt)</td><td>' + statusBadge(d.cstdCoSo) + '</td></tr>';
+      html += '<tr><td>Chiến sĩ thi đua cơ sở — đủ ĐK năm gần nhất?</td><td>' + statusBadge(d.cstdCoSo_dieuKienNamGanNhat) + '</td></tr>';
+      html += '<tr><td>Chiến sĩ thi đua cấp Bộ Y tế</td><td>' + statusBadge(d.cstdBo) + '</td></tr>';
+      html += '<tr><td>Bằng khen Thủ tướng CP (hướng b)</td><td>' + statusBadge(d.bangKhenTT) + '</td></tr>';
+      html += '<tr><td>Bằng khen Bộ trưởng Bộ Y tế</td><td>' + statusBadge(d.bangKhenBoYTe) + '</td></tr>';
+      html += '</table></div>';
+      document.getElementById('app-content').innerHTML = html;
+    }).withFailureHandler(showError).apiGetTienDoCaNhan(maNV);
+  }
+  function row_(label, val) { return '<tr><td>' + label + '</td><td><b>' + esc(val) + '</b></td></tr>'; }
+
+  // ====== TRANG: DANH MỤC ĐƠN VỊ ======
+  var dvEditingId = null;
+  function renderDonVi() {
+    google.script.run.withSuccessHandler(function (list) {
+      var html = '<div class="card"><h2>Danh mục đơn vị</h2>';
+      if (canEdit) {
+        html += '<form class="inline" onsubmit="return addDonVi(event)">' +
+          '<label>Tên đơn vị<input id="dv-ten" required></label>' +
+          '<label>Loại hình<select id="dv-loai"><option>Bộ môn</option><option>Phòng chức năng</option><option>Tập thể lớn</option></select></label>' +
+          '<label>Ghi chú<input id="dv-ghichu"></label>' +
+          '<button class="btn" type="submit">+ Thêm đơn vị</button></form>';
+        html += '<div class="inline" style="margin-bottom:12px">' +
+          '<button class="btn" type="button" onclick="exportTemplate(\'apiGetDonViTemplateCsv\',\'mau_don_vi.csv\')">⬇ Xuất file mẫu (CSV)</button>' +
+          '<label>Nhập dữ liệu từ file CSV<input type="file" accept=".csv" id="dv-import-file" onchange="importFile(\'dv-import-file\',\'apiImportDonViCsv\', renderDonVi)"></label>' +
+          '</div>';
+      }
+      html += '<div id="dv-msg"></div><table><tr><th>Mã</th><th>Tên đơn vị</th><th>Loại hình</th><th>Ghi chú</th>' +
+        (canEdit ? '<th>Thao tác</th>' : '') + '</tr>';
+      list.forEach(function (d) {
+        if (canEdit && dvEditingId === d.MaDonVi) {
+          html += '<tr>' +
+            '<td>' + esc(d.MaDonVi) + '</td>' +
+            '<td><input id="dv-edit-ten" value="' + esc(d.TenDonVi) + '"></td>' +
+            '<td><select id="dv-edit-loai">' + ['Bộ môn', 'Phòng chức năng', 'Tập thể lớn'].map(function (o) {
+              return '<option' + (o === d.LoaiHinh ? ' selected' : '') + '>' + o + '</option>';
+            }).join('') + '</select></td>' +
+            '<td><input id="dv-edit-ghichu" value="' + esc(d.GhiChu) + '"></td>' +
+            '<td><button class="btn" onclick="saveEditDonVi(\'' + d.MaDonVi + '\')">Lưu</button> ' +
+            '<button class="btn" style="background:#999" onclick="dvEditingId=null;renderDonVi()">Hủy</button></td></tr>';
+        } else {
+          html += '<tr><td>' + esc(d.MaDonVi) + '</td><td>' + esc(d.TenDonVi) + '</td><td>' + esc(d.LoaiHinh) + '</td><td>' + esc(d.GhiChu) + '</td>';
+          if (canEdit) {
+            html += '<td><button class="btn" onclick="dvEditingId=\'' + d.MaDonVi + '\';renderDonVi()">Sửa</button> ' +
+              '<button class="btn" style="background:#C0392B" onclick="deleteDonVi(\'' + d.MaDonVi + '\',\'' + esc(d.TenDonVi).replace(/'/g, "\\'") + '\')">Xóa</button></td>';
+          }
+          html += '</tr>';
+        }
+      });
+      html += '</table></div>';
+      document.getElementById('app-content').innerHTML = html;
+    }).withFailureHandler(showError).apiGetDonViList();
+  }
+  function addDonVi(e) {
+    e.preventDefault();
+    var data = { tenDonVi: val_('dv-ten'), loaiHinh: val_('dv-loai'), ghiChu: val_('dv-ghichu') };
+    google.script.run.withSuccessHandler(function () { renderDonVi(); }).withFailureHandler(showError).apiAddDonVi(data);
+    return false;
+  }
+  function saveEditDonVi(maDonVi) {
+    var patch = { tenDonVi: val_('dv-edit-ten'), loaiHinh: val_('dv-edit-loai'), ghiChu: val_('dv-edit-ghichu') };
+    google.script.run.withSuccessHandler(function () { dvEditingId = null; renderDonVi(); })
+      .withFailureHandler(showError).apiUpdateDonVi(maDonVi, patch);
+  }
+  function deleteDonVi(maDonVi, ten) {
+    if (!confirm('Xóa đơn vị "' + ten + '"? Thao tác này không thể hoàn tác.')) return;
+    google.script.run.withSuccessHandler(function () { renderDonVi(); }).withFailureHandler(showError).apiDeleteDonVi(maDonVi);
+  }
+
+  // ====== TRANG: DANH SÁCH CÁ NHÂN ======
+  var cnEditingId = null;
+  function renderCaNhan() {
+    Promise.all([ggsGet('apiGetCaNhanList', null), ggsGet('apiGetDonViList', null)]).then(function (r) {
+      var list = r[0], donViList = r[1];
+      var options = donViList.map(function (d) { return '<option>' + esc(d.TenDonVi) + '</option>'; }).join('');
+      var html = '<div class="card"><h2>Danh sách cá nhân</h2>';
+      if (canEdit) {
+        html += '<form class="inline" onsubmit="return addCaNhan(event)">' +
+          '<label>Họ và tên<input id="cn-hoten" required></label>' +
+          '<label>Đơn vị<select id="cn-donvi">' + options + '</select></label>' +
+          '<label>Chức vụ<input id="cn-chucvu"></label>' +
+          '<button class="btn" type="submit">+ Thêm cá nhân</button></form>';
+        html += '<div class="inline" style="margin-bottom:12px">' +
+          '<button class="btn" type="button" onclick="exportTemplate(\'apiGetCaNhanTemplateCsv\',\'mau_ca_nhan.csv\')">⬇ Xuất file mẫu (CSV)</button>' +
+          '<label>Nhập dữ liệu từ file CSV<input type="file" accept=".csv" id="cn-import-file" onchange="importFile(\'cn-import-file\',\'apiImportCaNhanCsv\', renderCaNhan)"></label>' +
+          '</div>';
+      }
+      html += '<div id="cn-msg"></div><table><tr><th>Mã NV</th><th>Họ tên</th><th>Đơn vị</th><th>Chức vụ</th>' +
+        (canEdit ? '<th>Thao tác</th>' : '') + '</tr>';
+      list.forEach(function (c) {
+        if (canEdit && cnEditingId === c.MaNV) {
+          html += '<tr>' +
+            '<td>' + esc(c.MaNV) + '</td>' +
+            '<td><input id="cn-edit-hoten" value="' + esc(c.HoTen) + '"></td>' +
+            '<td><select id="cn-edit-donvi">' + donViList.map(function (d) {
+              return '<option' + (d.TenDonVi === c.DonVi ? ' selected' : '') + '>' + esc(d.TenDonVi) + '</option>';
+            }).join('') + '</select></td>' +
+            '<td><input id="cn-edit-chucvu" value="' + esc(c.ChucVu) + '"></td>' +
+            '<td><button class="btn" onclick="saveEditCaNhan(\'' + c.MaNV + '\')">Lưu</button> ' +
+            '<button class="btn" style="background:#999" onclick="cnEditingId=null;renderCaNhan()">Hủy</button></td></tr>';
+        } else {
+          html += '<tr><td>' + esc(c.MaNV) + '</td><td>' + esc(c.HoTen) + '</td><td>' + esc(c.DonVi) + '</td><td>' + esc(c.ChucVu) + '</td>';
+          if (canEdit) {
+            html += '<td><button class="btn" onclick="cnEditingId=\'' + c.MaNV + '\';renderCaNhan()">Sửa</button> ' +
+              '<button class="btn" style="background:#C0392B" onclick="deleteCaNhan(\'' + c.MaNV + '\',\'' + esc(c.HoTen).replace(/'/g, "\\'") + '\')">Xóa</button></td>';
+          }
+          html += '</tr>';
+        }
+      });
+      html += '</table></div>';
+      document.getElementById('app-content').innerHTML = html;
+    }).catch(showError);
+  }
+  function addCaNhan(e) {
+    e.preventDefault();
+    var data = { hoTen: val_('cn-hoten'), donVi: val_('cn-donvi'), chucVu: val_('cn-chucvu') };
+    google.script.run.withSuccessHandler(function () { renderCaNhan(); }).withFailureHandler(showError).apiAddCaNhan(data);
+    return false;
+  }
+  function saveEditCaNhan(maNV) {
+    var patch = { hoTen: val_('cn-edit-hoten'), donVi: val_('cn-edit-donvi'), chucVu: val_('cn-edit-chucvu') };
+    google.script.run.withSuccessHandler(function () { cnEditingId = null; renderCaNhan(); })
+      .withFailureHandler(showError).apiUpdateCaNhan(maNV, patch);
+  }
+  function deleteCaNhan(maNV, hoTen) {
+    if (!confirm('Xóa cá nhân "' + hoTen + '"? Thao tác này không thể hoàn tác.')) return;
+    google.script.run.withSuccessHandler(function () { renderCaNhan(); }).withFailureHandler(showError).apiDeleteCaNhan(maNV);
+  }
+
+  // ====== TIỆN ÍCH XUẤT / NHẬP CSV (dùng chung) ======
+  function exportTemplate(apiFnName, filename) {
+    google.script.run.withSuccessHandler(function (csvText) {
+      downloadTextFile(filename, csvText);
+    }).withFailureHandler(showError)[apiFnName]();
+  }
+  function downloadTextFile(filename, content) {
+    var blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  function importFile(inputId, apiFnName, onDoneRerender) {
+    var input = document.getElementById(inputId);
+    var file = input.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var text = e.target.result;
+      google.script.run.withSuccessHandler(function (result) {
+        var msg = 'Đã nhập ' + result.soThem + ' dòng.';
+        if (result.loi && result.loi.length) msg += ' Có ' + result.loi.length + ' lỗi: ' + result.loi.join(' | ');
+        alert(msg);
+        input.value = '';
+        onDoneRerender();
+      }).withFailureHandler(function (err) { input.value = ''; showError(err); })[apiFnName](text);
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  // ====== TRANG: THÀNH TÍCH CÁ NHÂN ======
+  var ttcnCaNhanAll = [];      // cache toàn bộ cá nhân (chưa lọc)
+  var ttcnDonViDangLoc = '';   // '' = tất cả đơn vị
+  var ttcnEditingId = null;    // ID dòng thành tích đang sửa (null = đang ở chế độ thêm mới)
+  var ttcnCurrentList = [];    // cache danh sách thành tích của người đang xem (để tra cứu khi Sửa)
+
+  function renderThanhTichCN() {
+    Promise.all([ggsGet('apiGetCaNhanList', null), ggsGet('apiGetDonViList', null)]).then(function (r) {
+      ttcnCaNhanAll = r[0];
+      var donViList = r[1];
+      ttcnDonViDangLoc = '';
+      ttcnEditingId = null;
+
+      var levelOpts = COMPLETION_LEVELS.map(function (l) { return '<option>' + l + '</option>'; }).join('');
+      var dhOpts = buildDanhHieuOptGroups(DANHHIEU_CN_GROUPS);
+      var pvOpts = PHAM_VI.map(function (l) { return '<option>' + l + '</option>'; }).join('');
+      var nbhOpts = buildNoiBanHanhOpts();
+      var donViOpts = '<option value="">— Tất cả đơn vị (' + ttcnCaNhanAll.length + ' người) —</option>' +
+        donViList.map(function (d) { return '<option value="' + esc(d.TenDonVi) + '">' + esc(d.TenDonVi) + '</option>'; }).join('');
+
+      var html = '<div class="card"><h2>Thành tích cá nhân hàng năm</h2>' +
+        '<p style="font-size:12px;color:#888;margin-top:-6px">💡 1 năm có thể có NHIỀU quyết định riêng (VD: QĐ đánh giá mức hoàn thành, ' +
+        'QĐ công nhận danh hiệu, QĐ tặng Giấy khen/Bằng khen...) — hãy thêm MỖI QUYẾT ĐỊNH thành 1 dòng riêng (cùng năm), ' +
+        'chọn "— Không áp dụng —" ở Mức hoàn thành nếu dòng đó không phải QĐ đánh giá hoàn thành nhiệm vụ.</p>';
+      html += '<label style="display:block;margin-bottom:12px;max-width:320px">Lọc theo đơn vị (để tìm người nhanh hơn)' +
+        '<select id="tt-donvi-filter" onchange="filterThanhTichDonVi()" style="width:100%">' + donViOpts + '</select></label>';
+
+      if (canEdit) {
+        html += '<div class="inline" style="margin-bottom:12px">' +
+          '<button class="btn" type="button" onclick="exportTemplate(\'apiExportThanhTichCaNhanCsv\',\'thanh_tich_ca_nhan_toan_bo.csv\')">⬇ Xuất toàn bộ (CSV)</button>' +
+          '<button class="btn" type="button" onclick="exportTemplate(\'apiGetThanhTichCaNhanTemplateCsv\',\'mau_thanh_tich_ca_nhan.csv\')">⬇ Xuất file mẫu (CSV)</button>' +
+          '<label>Nhập hàng loạt từ file CSV<input type="file" accept=".csv" id="ttcn-import-file" onchange="importFile(\'ttcn-import-file\',\'apiImportThanhTichCaNhanCsv\', renderThanhTichCN)"></label>' +
+          '</div>';
+        html += '<form id="ttcn-form" class="inline" onsubmit="return submitThanhTichCN(event)">' +
+          '<label>Cá nhân<select id="tt-manv"></select></label>' +
+          '<label>Năm học<input id="tt-nam" placeholder="2024-2025" required></label>' +
+          '<label>Mức hoàn thành<select id="tt-muc">' + levelOpts + '</select></label>' +
+          '<label>Danh hiệu/hình thức đạt<select id="tt-danhhieu">' + dhOpts + '</select></label>' +
+          '<label>Tên sáng kiến/đề tài<input id="tt-sangkien"></label>' +
+          '<label>Phạm vi ảnh hưởng<select id="tt-phamvi">' + pvOpts + '</select></label>' +
+          '<label>Số Quyết định<input id="tt-soqd" placeholder="VD: 123/QĐ-ĐHYD"></label>' +
+          '<label>Ngày quyết định<input type="date" id="tt-ngayqd"></label>' +
+          '<label>Nơi ban hành<select id="tt-noibanhanh">' + nbhOpts + '</select></label>' +
+          '<label style="min-width:220px">Link minh chứng<input id="tt-linkminhchung" placeholder="Link Google Drive file scan QĐ..."></label>' +
+          '<button class="btn" type="submit" id="ttcn-submit-btn">+ Thêm</button>' +
+          '<button class="btn btn-local" type="button" id="ttcn-cancel-btn" style="background:#999;display:none" onclick="huyEditThanhTichCN()">Hủy sửa</button>' +
+          '</form>';
+      }
+      html += '<label>Xem thành tích của: <select id="tt-filter" onchange="loadThanhTichCN()"></select></label> ' +
+        '<button class="btn" type="button" style="background:#5B8A3A" onclick="loadThanhTichCN()">🔄 Làm mới</button>';
+      html += '<div id="tt-cn-table"></div></div>';
+      document.getElementById('app-content').innerHTML = html;
+      renderTtcnPersonDropdowns();
+    }).catch(showError);
+  }
+
+  // Vẽ lại 2 dropdown chọn người (form thêm + form xem) theo danh sách đã lọc đơn vị
+  function renderTtcnPersonDropdowns() {
+    var list = ttcnDonViDangLoc
+      ? ttcnCaNhanAll.filter(function (c) { return c.DonVi === ttcnDonViDangLoc; })
+      : ttcnCaNhanAll;
+    var options = list.map(function (c) {
+      return '<option value="' + esc(c.MaNV) + '">' + esc(c.MaNV) + ' - ' + esc(c.HoTen) + '</option>';
+    }).join('');
+    if (list.length === 0) options = '<option value="">(Không có ai trong đơn vị này)</option>';
+
+    var selManV = document.getElementById('tt-manv');
+    if (selManV) selManV.innerHTML = options;
+    var selFilter = document.getElementById('tt-filter');
+    if (selFilter) selFilter.innerHTML = options;
+
+    loadThanhTichCN();
+  }
+
+  function filterThanhTichDonVi() {
+    ttcnDonViDangLoc = val_('tt-donvi-filter');
+    renderTtcnPersonDropdowns();
+  }
+
+  function loadThanhTichCN() {
+    var maNV = val_('tt-filter');
+    var box = document.getElementById('tt-cn-table');
+    if (!maNV) { box.innerHTML = '<p style="color:#888;font-size:13px">Chưa có cá nhân nào để xem.</p>'; return; }
+    box.innerHTML = '<p style="color:#888;font-size:13px">Đang tải...</p>';
+    google.script.run.withSuccessHandler(function (list) {
+      ttcnCurrentList = list || [];
+      var html;
+      if (!list || list.length === 0) {
+        html = '<p style="color:#888;font-size:13px">Người này chưa có dữ liệu thành tích năm nào. ' +
+          'Dùng form phía trên để thêm thành tích đầu tiên.</p>';
+      } else {
+        html = '<table><tr><th>Năm</th><th>Mức HTNV</th><th>Danh hiệu/Hình thức</th><th>Sáng kiến/Đề tài</th>' +
+          '<th>Phạm vi</th><th>Số QĐ</th><th>Ngày QĐ</th><th>Nơi ban hành</th><th>Minh chứng</th>' + (canEdit ? '<th>Thao tác</th>' : '') + '</tr>';
+        list.forEach(function (t) {
+          html += '<tr><td>' + formatNamHoc(t.Nam) + '</td><td>' + formatMucHoanThanh(t.MucHoanThanh) + '</td><td>' + formatDanhHieu(t.DanhHieuDat) +
+            '</td><td>' + esc(t.TenSangKien) + '</td><td>' + esc(t.PhamVi) + '</td><td>' + esc(t.SoQD) +
+            '</td><td>' + formatDateVN(t.NgayQD) + '</td><td>' + esc(t.NoiBanHanh) + '</td><td>' + formatLinkMinhChung(t.LinkMinhChung) + '</td>';
+          if (canEdit) {
+            html += '<td><button class="btn" onclick="suaThanhTichCN(\'' + t.ID + '\')">Sửa</button> ' +
+              '<button class="btn" style="background:#C0392B" onclick="xoaThanhTichCN(\'' + t.ID + '\',\'' + esc(t.Nam) + '\')">Xóa</button></td>';
+          }
+          html += '</tr>';
+        });
+        html += '</table>';
+      }
+      box.innerHTML = html;
+    }).withFailureHandler(function (err) { box.innerHTML = ''; showError(err); }).apiGetThanhTichCaNhan(maNV);
+  }
+
+  function submitThanhTichCN(e) {
+    e.preventDefault();
+    var data = {
+      maNV: val_('tt-manv'), nam: val_('tt-nam'), mucHoanThanh: val_('tt-muc'),
+      danhHieuDat: val_('tt-danhhieu'), tenSangKien: val_('tt-sangkien'),
+      phamVi: val_('tt-phamvi'), soQD: val_('tt-soqd'),
+      ngayQD: val_('tt-ngayqd'), noiBanHanh: val_('tt-noibanhanh'), linkMinhChung: val_('tt-linkminhchung')
+    };
+    if (ttcnEditingId) {
+      google.script.run.withSuccessHandler(function () { huyEditThanhTichCN(); loadThanhTichCN(); })
+        .withFailureHandler(showError).apiUpdateThanhTichCaNhan(ttcnEditingId, data);
+    } else {
+      google.script.run.withSuccessHandler(function () { document.getElementById('ttcn-form').reset(); loadThanhTichCN(); })
+        .withFailureHandler(showError).apiAddThanhTichCaNhan(data);
+    }
+    return false;
+  }
+
+  function suaThanhTichCN(id) {
+    var t = ttcnCurrentList.filter(function (x) { return x.ID === id; })[0];
+    if (!t) return;
+    ttcnEditingId = id;
+    document.getElementById('tt-nam').value = t.Nam;
+    document.getElementById('tt-muc').value = t.MucHoanThanh;
+    document.getElementById('tt-danhhieu').value = t.DanhHieuDat;
+    document.getElementById('tt-sangkien').value = t.TenSangKien || '';
+    document.getElementById('tt-phamvi').value = t.PhamVi || '';
+    document.getElementById('tt-soqd').value = t.SoQD || '';
+    document.getElementById('tt-ngayqd').value = t.NgayQD ? String(t.NgayQD).substring(0, 10) : '';
+    document.getElementById('tt-noibanhanh').value = t.NoiBanHanh || '';
+    document.getElementById('tt-linkminhchung').value = t.LinkMinhChung || '';
+    document.getElementById('ttcn-submit-btn').textContent = '💾 Lưu thay đổi';
+    document.getElementById('ttcn-cancel-btn').style.display = 'inline-block';
+    document.getElementById('ttcn-form').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function huyEditThanhTichCN() {
+    ttcnEditingId = null;
+    var form = document.getElementById('ttcn-form');
+    if (form) form.reset();
+    var btn = document.getElementById('ttcn-submit-btn');
+    if (btn) btn.textContent = '+ Thêm';
+    var cancelBtn = document.getElementById('ttcn-cancel-btn');
+    if (cancelBtn) cancelBtn.style.display = 'none';
+  }
+
+  function xoaThanhTichCN(id, nam) {
+    if (!confirm('Xóa dòng thành tích năm ' + nam + '? Thao tác này không thể hoàn tác.')) return;
+    google.script.run.withSuccessHandler(function () { loadThanhTichCN(); }).withFailureHandler(showError).apiDeleteThanhTichCaNhan(id);
+  }
+
+  // ====== TRANG: THÀNH TÍCH TẬP THỂ ======
+  var tttEditingId = null; // ID dòng thành tích tập thể đang sửa
+
+  // ====== TRANG: SÁNG KIẾN / ĐỀ TÀI ======
+  var skThanhVienDangThem = []; // [{maNV, hoTen, tyLeDongGop}]
+  var skCaNhanAll = [];
+  var skDonViDangLoc = '';
+
+  function renderSangKien() {
+    ggsGet('apiGetCaNhanList', null).then(function (list) {
+      skCaNhanAll = list;
+      skThanhVienDangThem = [];
+      var html = '<div class="card"><h2>Sáng kiến / Đề tài</h2>' +
+        '<p style="font-size:12px;color:#888;margin-top:-6px">💡 Mỗi sáng kiến có thể có NHIỀU người tham gia, mỗi người 1 tỷ lệ đóng góp riêng. ' +
+        'Khi xét CSTĐ cơ sở cho 1 người, hệ thống chỉ tính sáng kiến còn <b>"Chưa dùng"</b> của người đó — dùng rồi thì không dùng lại được cho lần xét sau, ' +
+        'nhưng KHÔNG ảnh hưởng tới những người khác cùng tham gia sáng kiến đó.</p>';
+
+      if (canEdit) {
+        html += '<form id="sk-form" onsubmit="return submitSangKien(event)">' +
+          '<div class="inline">' +
+          '<label>Tên sáng kiến/đề tài<input id="sk-ten" style="min-width:280px" required></label>' +
+          '<label>Năm học<input id="sk-nam" placeholder="2024-2025" required></label>' +
+          '<label>Phạm vi ảnh hưởng<select id="sk-phamvi">' + PHAM_VI.map(function (l) { return '<option>' + l + '</option>'; }).join('') + '</select></label>' +
+          '</div>' +
+          '<div class="inline">' +
+          '<label>Số QĐ<input id="sk-soqd"></label>' +
+          '<label>Ngày QĐ<input type="date" id="sk-ngayqd"></label>' +
+          '<label>Nơi ban hành<select id="sk-noibanhanh">' + buildNoiBanHanhOpts() + '</select></label>' +
+          '<label style="min-width:200px">Link minh chứng<input id="sk-linkminhchung"></label>' +
+          '</div>' +
+          '<h3 style="font-size:13px;margin:10px 0 4px">Người tham gia</h3>' +
+          '<div class="inline">' +
+          '<label>Cá nhân<select id="sk-tv-manv">' + skCaNhanAll.map(function (c) { return '<option value="' + esc(c.MaNV) + '">' + esc(c.MaNV) + ' - ' + esc(c.HoTen) + '</option>'; }).join('') + '</select></label>' +
+          '<label>Tỷ lệ đóng góp<input id="sk-tv-tyle" placeholder="VD: 50%" style="width:100px"></label>' +
+          '<button class="btn" type="button" onclick="themThanhVienSangKien()">+ Thêm vào danh sách</button>' +
+          '</div>' +
+          '<div id="sk-tv-list" style="margin:8px 0"></div>' +
+          '<button class="btn" type="submit">💾 Lưu sáng kiến</button>' +
+          '</form>';
+      }
+
+      html += '<h3 style="font-size:13px;margin-top:18px">Danh sách sáng kiến đã có</h3>' +
+        '<label style="display:block;max-width:240px;margin-bottom:8px">Lọc theo năm học<input id="sk-loc-nam" placeholder="VD: 2024-2025" onkeydown="if(event.key===\'Enter\')loadDanhSachSangKien()"> ' +
+        '<button class="btn" type="button" onclick="loadDanhSachSangKien()" style="margin-top:6px">Lọc</button> ' +
+        '<button class="btn" type="button" style="background:#999" onclick="document.getElementById(\'sk-loc-nam\').value=\'\';loadDanhSachSangKien()">Xem tất cả</button></label>';
+      html += '<div id="sk-danhsach"></div></div>';
+      document.getElementById('app-content').innerHTML = html;
+      renderDanhSachThanhVienSangKien();
+      loadDanhSachSangKien();
+    }).catch(showError);
+  }
+
+  function themThanhVienSangKien() {
+    var maNV = val_('sk-tv-manv');
+    var tyLe = val_('sk-tv-tyle');
+    if (!maNV) return;
+    if (skThanhVienDangThem.some(function (t) { return t.maNV === maNV; })) {
+      alert('Người này đã có trong danh sách rồi.');
+      return;
+    }
+    var nguoi = skCaNhanAll.filter(function (c) { return c.MaNV === maNV; })[0];
+    skThanhVienDangThem.push({ maNV: maNV, hoTen: nguoi ? nguoi.HoTen : '', tyLeDongGop: tyLe });
+    document.getElementById('sk-tv-tyle').value = '';
+    renderDanhSachThanhVienSangKien();
+  }
+
+  function xoaThanhVienDangThem(maNV) {
+    skThanhVienDangThem = skThanhVienDangThem.filter(function (t) { return t.maNV !== maNV; });
+    renderDanhSachThanhVienSangKien();
+  }
+
+  function renderDanhSachThanhVienSangKien() {
+    var box = document.getElementById('sk-tv-list');
+    if (!box) return;
+    if (skThanhVienDangThem.length === 0) {
+      box.innerHTML = '<p style="color:#888;font-size:12.5px">Chưa thêm người tham gia nào.</p>';
+      return;
+    }
+    var html = '<table><tr><th>Mã NV</th><th>Họ tên</th><th>Tỷ lệ đóng góp</th><th></th></tr>';
+    skThanhVienDangThem.forEach(function (t) {
+      html += '<tr><td>' + esc(t.maNV) + '</td><td>' + esc(t.hoTen) + '</td><td>' + esc(t.tyLeDongGop) + '</td>' +
+        '<td><button class="btn btn-local" style="background:#C0392B" onclick="xoaThanhVienDangThem(\'' + esc(t.maNV) + '\')">Xóa</button></td></tr>';
+    });
+    html += '</table>';
+    box.innerHTML = html;
+  }
+
+  function submitSangKien(e) {
+    e.preventDefault();
+    if (skThanhVienDangThem.length === 0) { alert('Cần thêm ít nhất 1 người tham gia.'); return false; }
+    var data = {
+      tenSangKien: val_('sk-ten'), nam: val_('sk-nam'), phamVi: val_('sk-phamvi'),
+      soQD: val_('sk-soqd'), ngayQD: val_('sk-ngayqd'), noiBanHanh: val_('sk-noibanhanh'),
+      linkMinhChung: val_('sk-linkminhchung'), thanhVien: skThanhVienDangThem
+    };
+    google.script.run.withSuccessHandler(function () { renderSangKien(); }).withFailureHandler(showError).apiAddSangKien(data);
+    return false;
+  }
+
+  function loadDanhSachSangKien() {
+    var nam = val_('sk-loc-nam');
+    var box = document.getElementById('sk-danhsach');
+    box.innerHTML = '<p style="color:#888;font-size:13px">Đang tải...</p>';
+    google.script.run.withSuccessHandler(function (list) {
+      if (!list || list.length === 0) {
+        box.innerHTML = '<p style="color:#888;font-size:13px">Chưa có sáng kiến nào.</p>';
+        return;
+      }
+      var html = '';
+      list.forEach(function (sk) {
+        html += '<div class="card" style="background:#F5F7FA;margin-bottom:10px">' +
+          '<div style="display:flex;justify-content:space-between;align-items:start">' +
+          '<div><b>' + esc(sk.maSK) + '</b> — ' + esc(sk.tenSangKien) + ' <span style="color:#888;font-size:12px">(' + formatNamHoc(sk.nam) + ', ' + esc(sk.phamVi) + ')</span></div>';
+        if (canEdit) {
+          html += '<button class="btn" style="background:#C0392B" onclick="xoaSangKien(\'' + esc(sk.maSK) + '\')">Xóa sáng kiến</button>';
+        }
+        html += '</div>';
+        if (sk.soQD || sk.ngayQD || sk.noiBanHanh || sk.linkMinhChung) {
+          html += '<p style="font-size:12px;color:#666;margin:4px 0">Số QĐ: ' + esc(sk.soQD) + ' — Ngày QĐ: ' + formatDateVN(sk.ngayQD) +
+            ' — ' + esc(sk.noiBanHanh) + (sk.linkMinhChung ? ' — ' + formatLinkMinhChung(sk.linkMinhChung) : '') + '</p>';
+        }
+        html += '<table><tr><th>Người tham gia</th><th>Tỷ lệ</th><th>Trạng thái</th><th>Thao tác</th></tr>';
+        sk.thanhVien.forEach(function (tv) {
+          var daDung = tv.daDungXet === 'Có';
+          html += '<tr><td>' + esc(tv.hoTen) + ' (' + esc(tv.maNV) + ')</td><td>' + esc(tv.tyLeDongGop) + '</td>' +
+            '<td>' + (daDung ? statusBadge('Đã dùng — ' + tv.danhHieuDaXet + (tv.namXet ? ' (' + formatNamHoc(tv.namXet) + ')' : '')) : statusBadge('Chưa dùng')) + '</td>' +
+            '<td>';
+          if (canEdit) {
+            if (daDung) {
+              html += '<button class="btn" style="background:#999" onclick="boDanhDauSangKien(\'' + esc(sk.maSK) + '\',\'' + esc(tv.maNV) + '\')">Bỏ đánh dấu</button>';
+            } else {
+              html += '<button class="btn" onclick="danhDauDaDungSangKien(\'' + esc(sk.maSK) + '\',\'' + esc(tv.maNV) + '\',\'' + esc(sk.nam) + '\')">Đánh dấu đã dùng (CSTĐ CS)</button>';
+            }
+          }
+          html += '</td></tr>';
+        });
+        html += '</table></div>';
+      });
+      box.innerHTML = html;
+    }).withFailureHandler(function (err) { box.innerHTML = ''; showError(err); }).apiGetSangKienList(nam);
+  }
+
+  function xoaSangKien(maSK) {
+    if (!confirm('Xóa sáng kiến ' + maSK + '? Toàn bộ danh sách người tham gia của sáng kiến này cũng sẽ bị xóa.')) return;
+    google.script.run.withSuccessHandler(function () { loadDanhSachSangKien(); }).withFailureHandler(showError).apiDeleteSangKien(maSK);
+  }
+
+  function danhDauDaDungSangKien(maSK, maNV, nam) {
+    if (!confirm('Đánh dấu người này ĐÃ DÙNG sáng kiến này để xét Chiến sĩ thi đua cơ sở?\nSau khi đánh dấu, không thể dùng lại sáng kiến này để xét lần sau cho người này.')) return;
+    google.script.run.withSuccessHandler(function () { loadDanhSachSangKien(); })
+      .withFailureHandler(showError).apiDanhDauDaDungSangKien(maSK, maNV, 'Chiến sĩ thi đua cơ sở', nam);
+  }
+
+  function boDanhDauSangKien(maSK, maNV) {
+    if (!confirm('Bỏ đánh dấu "đã dùng" cho người này? Sáng kiến sẽ dùng lại được để xét lần sau.')) return;
+    google.script.run.withSuccessHandler(function () { loadDanhSachSangKien(); }).withFailureHandler(showError).apiBoDanhDauSangKien(maSK, maNV);
+  }
+
+  function renderThanhTichTT() {
+    ggsGet('apiGetDonViList', null).then(function (donViList) {
+      var options = donViList.map(function (d) { return '<option>' + esc(d.TenDonVi) + '</option>'; }).join('');
+      var levelOpts = COMPLETION_LEVELS.map(function (l) { return '<option>' + l + '</option>'; }).join('');
+      var dhOpts = buildDanhHieuOptGroups(DANHHIEU_TT_GROUPS);
+      var nbhOpts = buildNoiBanHanhOpts();
+      tttEditingId = null;
+
+      var html = '<div class="card"><h2>Thành tích tập thể hàng năm</h2>' +
+        '<p style="font-size:12px;color:#888;margin-top:-6px">💡 Tương tự cá nhân — 1 năm có thể có nhiều quyết định riêng cho tập thể ' +
+        '(QĐ đánh giá mức hoàn thành, QĐ công nhận danh hiệu, QĐ tặng cờ/bằng khen...), thêm mỗi QĐ thành 1 dòng riêng (cùng năm).</p>';
+      if (canEdit) {
+        html += '<div class="inline" style="margin-bottom:12px">' +
+          '<button class="btn" type="button" onclick="exportTemplate(\'apiExportThanhTichTapTheCsv\',\'thanh_tich_tap_the_toan_bo.csv\')">⬇ Xuất toàn bộ (CSV)</button>' +
+          '<button class="btn" type="button" onclick="exportTemplate(\'apiGetThanhTichTapTheTemplateCsv\',\'mau_thanh_tich_tap_the.csv\')">⬇ Xuất file mẫu (CSV)</button>' +
+          '<label>Nhập hàng loạt từ file CSV<input type="file" accept=".csv" id="tttt-import-file" onchange="importFile(\'tttt-import-file\',\'apiImportThanhTichTapTheCsv\', renderThanhTichTT)"></label>' +
+          '</div>';
+        html += '<form id="tttt-form" class="inline" onsubmit="return submitThanhTichTT(event)">' +
+          '<label>Đơn vị<select id="tt2-donvi">' + options + '</select></label>' +
+          '<label>Năm học<input id="tt2-nam" placeholder="2024-2025" required></label>' +
+          '<label>Mức hoàn thành<select id="tt2-muc">' + levelOpts + '</select></label>' +
+          '<label>Không kỷ luật?<select id="tt2-kyluat"><option>Có</option><option>Không</option></select></label>' +
+          '<label>Danh hiệu/hình thức đạt<select id="tt2-danhhieu">' + dhOpts + '</select></label>' +
+          '<label>Số Quyết định<input id="tt2-soqd" placeholder="VD: 456/QĐ-ĐHYD"></label>' +
+          '<label>Ngày quyết định<input type="date" id="tt2-ngayqd"></label>' +
+          '<label>Nơi ban hành<select id="tt2-noibanhanh">' + nbhOpts + '</select></label>' +
+          '<label style="min-width:220px">Link minh chứng<input id="tt2-linkminhchung" placeholder="Link Google Drive file scan QĐ..."></label>' +
+          '<button class="btn" type="submit" id="tttt-submit-btn">+ Thêm</button>' +
+          '<button class="btn btn-local" type="button" id="tttt-cancel-btn" style="background:#999;display:none" onclick="huyEditThanhTichTT()">Hủy sửa</button>' +
+          '</form>';
+      }
+      html += '<label>Xem tiến độ của: <select id="tt2-filter" onchange="loadTienDoTT()">' + options + '</select></label>';
+      html += '<div id="tt-tt-table"></div></div>';
+      document.getElementById('app-content').innerHTML = html;
+      loadTienDoTT();
+    }).catch(showError);
+  }
+  var tttCurrentList = []; // cache chi tiết đang xem (để tra cứu khi Sửa)
+  function loadTienDoTT() {
+    var donVi = val_('tt2-filter');
+    if (!donVi) return;
+    google.script.run.withSuccessHandler(function (d) {
+      tttCurrentList = d.chiTiet || [];
+      var html = '<h3>' + esc(d.donVi) + '</h3>';
+      html += '<table><tr><th>Chỉ số</th><th>Giá trị</th></tr>';
+      html += row_('Tổng số năm có dữ liệu', d.tongSoNam);
+      html += row_('Số năm đạt Tập thể LĐ tiên tiến', d.soNamLDTT);
+      html += row_('Số năm đạt Tập thể LĐ xuất sắc', d.soNamLDXS);
+      html += row_('Số năm đạt Cờ thi đua Bộ Y tế', d.soNamCoBYT);
+      html += row_('Số năm đạt Cờ thi đua Chính phủ', d.soNamCoCP);
+      html += '</table>';
+      html += '<p style="font-size:12px;color:#888">' + esc(d.ghiChu) + '</p>';
+      html += '<table><tr><th>Năm</th><th>Mức HTNV</th><th>Danh hiệu/Hình thức đạt</th><th>Tỷ lệ LĐTT</th>' +
+        '<th>Số CSTĐ CS</th><th>Đủ ĐK định lượng</th><th>Số QĐ</th><th>Ngày QĐ</th><th>Nơi ban hành</th><th>Minh chứng</th>' +
+        (canEdit ? '<th>Thao tác</th>' : '') + '</tr>';
+      d.chiTiet.forEach(function (c) {
+        var tyLe = c.tyLeLDTT !== null ? Math.round(c.tyLeLDTT * 100) + '%' : '—';
+        html += '<tr><td>' + formatNamHoc(c.nam) + '</td><td>' + formatMucHoanThanh(c.mucHoanThanh) + '</td><td>' + formatDanhHieu(c.danhHieuDat) + '</td><td>' + tyLe +
+          '</td><td>' + esc(c.soCSTD) + '</td><td>' + statusBadge(c.dieuKien) + '</td><td>' + esc(c.soQD) +
+          '</td><td>' + formatDateVN(c.ngayQD) + '</td><td>' + esc(c.noiBanHanh) + '</td><td>' + formatLinkMinhChung(c.linkMinhChung) + '</td>';
+        if (canEdit) {
+          html += '<td><button class="btn" onclick="suaThanhTichTT(\'' + c.id + '\')">Sửa</button> ' +
+            '<button class="btn" style="background:#C0392B" onclick="xoaThanhTichTT(\'' + c.id + '\',\'' + esc(c.nam) + '\')">Xóa</button></td>';
+        }
+        html += '</tr>';
+      });
+      html += '</table>';
+      document.getElementById('tt-tt-table').innerHTML = html;
+    }).withFailureHandler(showError).apiGetTienDoTapThe(donVi);
+  }
+  function submitThanhTichTT(e) {
+    e.preventDefault();
+    var data = {
+      donVi: val_('tt2-donvi'), nam: val_('tt2-nam'), mucHoanThanh: val_('tt2-muc'),
+      khongKyLuat: val_('tt2-kyluat'), danhHieuDat: val_('tt2-danhhieu'), soQD: val_('tt2-soqd'),
+      ngayQD: val_('tt2-ngayqd'), noiBanHanh: val_('tt2-noibanhanh'), linkMinhChung: val_('tt2-linkminhchung')
+    };
+    if (tttEditingId) {
+      google.script.run.withSuccessHandler(function () { huyEditThanhTichTT(); loadTienDoTT(); })
+        .withFailureHandler(showError).apiUpdateThanhTichTapThe(tttEditingId, data);
+    } else {
+      google.script.run.withSuccessHandler(function () { document.getElementById('tttt-form').reset(); loadTienDoTT(); })
+        .withFailureHandler(showError).apiAddThanhTichTapThe(data);
+    }
+    return false;
+  }
+  function suaThanhTichTT(id) {
+    var c = tttCurrentList.filter(function (x) { return x.id === id; })[0];
+    if (!c) return;
+    tttEditingId = id;
+    document.getElementById('tt2-nam').value = c.nam;
+    document.getElementById('tt2-muc').value = c.mucHoanThanh;
+    document.getElementById('tt2-danhhieu').value = c.danhHieuDat;
+    document.getElementById('tt2-soqd').value = c.soQD || '';
+    document.getElementById('tt2-ngayqd').value = c.ngayQD ? String(c.ngayQD).substring(0, 10) : '';
+    document.getElementById('tt2-noibanhanh').value = c.noiBanHanh || '';
+    document.getElementById('tt2-linkminhchung').value = c.linkMinhChung || '';
+    document.getElementById('tttt-submit-btn').textContent = '💾 Lưu thay đổi';
+    document.getElementById('tttt-cancel-btn').style.display = 'inline-block';
+    document.getElementById('tttt-form').scrollIntoView({ behavior: 'smooth' });
+  }
+  function huyEditThanhTichTT() {
+    tttEditingId = null;
+    var form = document.getElementById('tttt-form');
+    if (form) form.reset();
+    var btn = document.getElementById('tttt-submit-btn');
+    if (btn) btn.textContent = '+ Thêm';
+    var cancelBtn = document.getElementById('tttt-cancel-btn');
+    if (cancelBtn) cancelBtn.style.display = 'none';
+  }
+  function xoaThanhTichTT(id, nam) {
+    if (!confirm('Xóa dòng thành tích tập thể năm ' + nam + '? Thao tác này không thể hoàn tác.')) return;
+    google.script.run.withSuccessHandler(function () { loadTienDoTT(); }).withFailureHandler(showError).apiDeleteThanhTichTapThe(id);
+  }
+
+  // ====== TRANG: TỔNG HỢP TOÀN TRƯỜNG ======
+  var tongHopData = null;
+  var tongHopDonViDangChon = null; // null = xem tất cả
+
+  function renderTongHop() {
+    google.script.run.withSuccessHandler(function (d) {
+      tongHopData = d;
+      tongHopDonViDangChon = null;
+      var html =
+        '<div class="card" id="tonghop-tapthe-card"></div>' +
+        '<div class="card" id="tonghop-canhan-card"></div>';
+      document.getElementById('app-content').innerHTML = html;
+      renderTongHopCaNhanTable();
+      renderTongHopTapTheTable();
+    }).withFailureHandler(showError).apiGetTongHopToanTruong();
+  }
+
+  function renderTongHopCaNhanTable() {
+    var d = tongHopData;
+    var selectedInfo = tongHopDonViDangChon
+      ? d.tienDoTapThe.filter(function (t) { return t.donVi === tongHopDonViDangChon; })[0]
+      : null;
+    var isTapTheLon = selectedInfo && selectedInfo.laTapTheLon;
+
+    var list;
+    if (!tongHopDonViDangChon) {
+      list = d.tienDoCaNhan;
+    } else if (isTapTheLon) {
+      list = d.tienDoCaNhan; // Tập thể lớn = toàn bộ nhân sự các đơn vị con, không lọc theo tên
+    } else {
+      list = d.tienDoCaNhan.filter(function (p) { return p.donVi === tongHopDonViDangChon; });
+    }
+
+    var title;
+    if (!tongHopDonViDangChon) {
+      title = 'Cá nhân (' + list.length + ' người) <span class="badge">Bấm vào 1 đơn vị bên phải để lọc</span>';
+    } else {
+      title = 'Cá nhân (' + list.length + ' người) — ' + esc(tongHopDonViDangChon) +
+        (isTapTheLon ? ' <span class="badge">toàn trường</span>' : '') +
+        ' <button class="btn btn-local" style="background:#999;font-size:11px;padding:4px 10px" onclick="boLocTongHop()">✕ Xem tất cả</button>';
+    }
+
+    var html = '<h2>' + title + '</h2>';
+    if (isTapTheLon) {
+      html += '<p style="color:#888;font-size:12px">"' + esc(tongHopDonViDangChon) + '" là tập thể lớn, gồm toàn bộ nhân sự của tất cả đơn vị con bên dưới.</p>';
+    }
+    if (list.length === 0) {
+      html += '<p style="color:#888;font-size:13px">Đơn vị này chưa có dữ liệu cá nhân.</p>';
+    } else {
+      html += '<table><tr><th>Mã NV</th><th>Họ tên</th><th>Đơn vị</th><th>Giấy khen HT</th><th>CSTĐ CS</th><th>CSTĐ Bộ</th><th>BK TTCP</th><th>BK Bộ Y tế</th></tr>';
+      list.forEach(function (p) {
+        html += '<tr><td class="clickable-cell" onclick="openCaNhanDrawer(\'' + esc(p.maNV) + '\')">' + esc(p.maNV) +
+          '</td><td class="clickable-cell" onclick="openCaNhanDrawer(\'' + esc(p.maNV) + '\')">' + esc(p.hoTen) + '</td><td>' + esc(p.donVi) + '</td>' +
+          '<td>' + statusBadge(p.giayKhenHT) + '</td><td>' + statusBadge(p.cstdCoSo) + '</td>' +
+          '<td>' + statusBadge(p.cstdBo) + '</td><td>' + statusBadge(p.bangKhenTT) + '</td><td>' + statusBadge(p.bangKhenBoYTe) + '</td></tr>';
+      });
+      html += '</table>';
+    }
+    document.getElementById('tonghop-canhan-card').innerHTML = html;
+  }
+
+  // ====== HỘC TRƯỢT (DRAWER) CHI TIẾT CÁ NHÂN ======
+  function openCaNhanDrawer(maNV) {
+    document.getElementById('drawer-overlay').classList.add('open');
+    document.getElementById('drawer-panel').classList.add('open');
+    document.getElementById('drawer-title').textContent = 'Đang tải...';
+    document.getElementById('drawer-body').innerHTML = '<p style="color:#888;font-size:13px">Đang tải...</p>';
+
+    Promise.all([ggsGet('apiGetTienDoCaNhan', maNV), ggsGet('apiGetThanhTichCaNhan', maNV)]).then(function (r) {
+      var tienDo = r[0], lichSu = r[1];
+      // Chỉ hiện Mã NV kèm tên khi đã mở khóa Quản trị (nội bộ) — tránh lộ mã có thể trùng
+      // số CCCD/định danh cá nhân ra công khai qua tab Tìm kiếm.
+      document.getElementById('drawer-title').textContent = adminUnlocked ? (tienDo.hoTen + ' (' + tienDo.maNV + ')') : tienDo.hoTen;
+
+      var html = '<p style="font-size:12px;color:#666;margin-top:0">' + esc(tienDo.donVi) + '</p>';
+
+      html += '<div class="drawer-stat-grid">' +
+        '<div class="drawer-stat-box"><div class="num">' + tienDo.tongSoNam + '</div><div class="lbl">Tổng số năm có dữ liệu</div></div>' +
+        '<div class="drawer-stat-box"><div class="num">' + tienDo.tongSoLanCSTD + '</div><div class="lbl">Tổng lần CSTĐ cơ sở</div></div>' +
+        '<div class="drawer-stat-box"><div class="num">' + tienDo.streakHTTNV + '</div><div class="lbl">Streak HT tốt/XS NV</div></div>' +
+        '<div class="drawer-stat-box"><div class="num">' + tienDo.streakCSTD + '</div><div class="lbl">Streak CSTĐ cơ sở</div></div>' +
+        '</div>';
+
+      html += '<h3 style="font-size:13px;margin-bottom:6px">Danh hiệu, hình thức khen thưởng</h3>';
+      if (adminUnlocked) {
+        // Chế độ nội bộ (đã đăng nhập Quản trị): hiện đánh giá "đủ điều kiện xét tặng hay chưa" —
+        // phục vụ công tác TCCB, không phải kết luận cuối cùng (vẫn cần đối chiếu hồ sơ đầy đủ).
+        html += '<table style="margin-bottom:18px"><tr><th>Danh hiệu</th><th>Trạng thái</th></tr>' +
+          '<tr><td>Giấy khen HT — đường (a) hoàn thành tốt/XS NV</td><td>' + statusBadge(tienDo.duongA_GiayKhenHT) + '</td></tr>' +
+          '<tr><td>Giấy khen HT — đường (b) 3 năm liên tục CSTĐ CS</td><td>' + statusBadge(tienDo.duongB_GiayKhenHT) + '</td></tr>' +
+          '<tr><td>Chiến sĩ thi đua cơ sở (đã từng đạt)</td><td>' + statusBadge(tienDo.cstdCoSo) + '</td></tr>' +
+          '<tr><td>Chiến sĩ thi đua cơ sở — đủ ĐK năm gần nhất?</td><td>' + statusBadge(tienDo.cstdCoSo_dieuKienNamGanNhat) + '</td></tr>' +
+          '<tr><td>Chiến sĩ thi đua cấp Bộ</td><td>' + statusBadge(tienDo.cstdBo) + '</td></tr>' +
+          '<tr><td>Bằng khen Thủ tướng CP</td><td>' + statusBadge(tienDo.bangKhenTT) + '</td></tr>' +
+          '<tr><td>Bằng khen Bộ trưởng Bộ Y tế</td><td>' + statusBadge(tienDo.bangKhenBoYTe) + '</td></tr></table>';
+      } else {
+        // Chế độ công khai (Tìm kiếm, chưa đăng nhập): CHỈ hiện SỐ LẦN đã từng đạt (sự kiện khách
+        // quan đã ghi nhận), KHÔNG hiện đánh giá "đủ điều kiện" — việc xét duyệt thuộc thẩm quyền TCCB.
+        html += '<table style="margin-bottom:18px"><tr><th>Danh hiệu</th><th>Số lần đã đạt</th></tr>' +
+          '<tr><td>Giấy khen Hiệu trưởng</td><td><b>' + tienDo.soLanGiayKhenHT + '</b></td></tr>' +
+          '<tr><td>Chiến sĩ thi đua cơ sở</td><td><b>' + tienDo.tongSoLanCSTD + '</b></td></tr>' +
+          '<tr><td>Chiến sĩ thi đua cấp Bộ</td><td><b>' + tienDo.soLanCSTDBo + '</b></td></tr>' +
+          '<tr><td>Bằng khen Thủ tướng CP</td><td><b>' + tienDo.soLanBangKhenTTCP + '</b></td></tr>' +
+          '<tr><td>Bằng khen Bộ trưởng Bộ Y tế</td><td><b>' + tienDo.soLanBangKhenBoYTe + '</b></td></tr></table>';
+      }
+
+      html += '<h3 style="font-size:13px;margin-bottom:6px">Lịch sử thành tích theo năm (' + lichSu.length + ' dòng)</h3>';
+      if (lichSu.length === 0) {
+        html += '<p style="color:#888;font-size:13px">Chưa có dữ liệu thành tích năm nào.</p>';
+      } else {
+        lichSu.sort(function (a, b) { return extractYear(b.Nam) - extractYear(a.Nam); });
+        html += '<table><tr><th>Năm</th><th>Mức HTNV</th><th>Danh hiệu/Hình thức</th><th>Số QĐ</th><th>Ngày QĐ</th><th>Minh chứng</th></tr>';
+        lichSu.forEach(function (t) {
+          html += '<tr><td>' + formatNamHoc(t.Nam) + '</td><td>' + formatMucHoanThanh(t.MucHoanThanh) + '</td><td>' + formatDanhHieu(t.DanhHieuDat) +
+            '</td><td>' + esc(t.SoQD) + '</td><td>' + formatDateVN(t.NgayQD) + '</td><td>' + formatLinkMinhChung(t.LinkMinhChung) + '</td></tr>';
+          if (t.TenSangKien) {
+            html += '<tr><td colspan="6" style="font-size:11px;color:#888;padding-top:0">↳ Sáng kiến/Đề tài: ' +
+              esc(t.TenSangKien) + (t.PhamVi ? ' (' + esc(t.PhamVi) + ')' : '') + '</td></tr>';
+          }
+        });
+        html += '</table>';
+      }
+
+      document.getElementById('drawer-body').innerHTML = html;
+    }).catch(function (err) {
+      document.getElementById('drawer-body').innerHTML = '<p style="color:#C0392B;font-size:13px">Lỗi: ' + esc(err.message || err) + '</p>';
+    });
+  }
+
+  function closeCaNhanDrawer() {
+    document.getElementById('drawer-overlay').classList.remove('open');
+    document.getElementById('drawer-panel').classList.remove('open');
+  }
+
+  function renderTongHopTapTheTable() {
+    var d = tongHopData;
+    var html = '<h2>Tập thể (' + d.tienDoTapThe.length + ' đơn vị)</h2>' +
+      '<table><tr><th>Đơn vị</th><th>Số năm LĐTT</th><th>Số năm LĐXS</th><th>Cờ BYT</th><th>Cờ CP</th></tr>';
+    d.tienDoTapThe.forEach(function (t) {
+      var isSelected = tongHopDonViDangChon === t.donVi;
+      html += '<tr class="clickable-row' + (isSelected ? ' row-selected' : '') +
+        '" onclick="chonDonViTongHop(\'' + esc(t.donVi).replace(/'/g, "\\'") + '\')">' +
+        '<td>' + esc(t.donVi) + (isSelected ? ' 👈' : '') + '</td><td>' + esc(t.soNamLDTT) + '</td><td>' + esc(t.soNamLDXS) +
+        '</td><td>' + esc(t.soNamCoBYT) + '</td><td>' + esc(t.soNamCoCP) + '</td></tr>';
+    });
+    html += '</table>';
+    document.getElementById('tonghop-tapthe-card').innerHTML = html;
+  }
+
+  function chonDonViTongHop(donVi) {
+    tongHopDonViDangChon = (tongHopDonViDangChon === donVi) ? null : donVi; // bấm lại cùng đơn vị -> bỏ lọc
+    renderTongHopCaNhanTable();
+    renderTongHopTapTheTable();
+  }
+
+  function boLocTongHop() {
+    tongHopDonViDangChon = null;
+    renderTongHopCaNhanTable();
+    renderTongHopTapTheTable();
+  }
+
+  // ====== PHẢN HỒI "ĐANG XỬ LÝ..." CHO NÚT BẤM (áp dụng chung toàn hệ thống) ======
+  // Vấn đề: bấm Thêm/Sửa/Xóa/Đăng nhập... không có dấu hiệu gì trong lúc chờ server phản hồi,
+  // khiến người dùng tưởng chưa bấm trúng và bấm lại nhiều lần. Giải pháp: bắt sự kiện click/submit
+  // ở mức toàn trang (không cần sửa từng nút), tự động hiện vòng xoay ngay khi bấm.
+  // Các nút xử lý HOÀN TOÀN cục bộ (không gọi server) được đánh dấu class "btn-local" để bỏ qua,
+  // tránh hiện vòng xoay không cần thiết cho thao tác vốn dĩ tức thì (VD: Hủy sửa, Đóng).
+  function batDauLoading(btn) {
+    if (!btn || btn.classList.contains('btn-local') || btn.classList.contains('btn-loading')) return;
+    btn.classList.add('btn-loading');
+    btn.disabled = true;
+    // An toàn: tự tắt sau 12 giây phòng trường hợp không có callback nào chạy tới (lỗi mạng lạ,
+    // nút không nằm trong luồng render lại...) — tránh nút bị "kẹt" vô thời hạn.
+    btn._loadingTimeout = setTimeout(function () { ketThucLoading(btn); }, 12000);
+  }
+  function ketThucLoading(btn) {
+    if (!btn) return;
+    clearTimeout(btn._loadingTimeout);
+    btn.classList.remove('btn-loading');
+    btn.disabled = false;
+  }
+  // Nút trong <form onsubmit="return xyz(event)"> — bắt lúc submit, luôn là hành động gọi server.
+  document.addEventListener('submit', function (e) {
+    var btn = e.target.querySelector('button[type="submit"]');
+    batDauLoading(btn);
+  }, true);
+  // Nút bấm trực tiếp (onclick, không nằm trong form) — mặc định coi là gọi server trừ khi đánh
+  // dấu "btn-local". Đa số renderXxx() sau khi xong sẽ thay mới toàn bộ HTML chứa nút này, nên
+  // vòng xoay tự biến mất cùng nút cũ — không cần chủ động tắt cho từng trường hợp.
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('button.btn');
+    if (!btn || btn.type === 'submit') return; // nút submit đã xử lý riêng ở sự kiện 'submit' phía trên
+    batDauLoading(btn);
+  }, true);
+
+  // ====== TIỆN ÍCH ======
+  function val_(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+  function showError(err) {
+    // Bất kỳ nút nào đang ở trạng thái "đang xử lý" khi có lỗi xảy ra đều cần tắt loading ngay,
+    // không đợi hết thời gian an toàn 12 giây — để người dùng bấm lại được luôn.
+    document.querySelectorAll('button.btn.btn-loading').forEach(function (b) { ketThucLoading(b); });
+    var box = document.getElementById('app-content');
+    var msg = '<div class="msg error">Lỗi: ' + esc(err.message || err) + '</div>';
+    box.insertAdjacentHTML('afterbegin', msg);
+  }
+  function ggsGet(fnName, arg) {
+    return new Promise(function (resolve, reject) {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fnName](arg);
+    });
+  }
+
+  // ====== CẢNH BÁO CÒN SÓT DỮ LIỆU MẪU ======
+  function checkSampleDataBanner() {
+    if (!canEdit) return; // chỉ hiện cho người có quyền dọn dẹp
+    google.script.run.withSuccessHandler(function (r) {
+      if (r.tong > 0) {
+        var chiTiet = [];
+        if (r.caNhan > 0) chiTiet.push(r.caNhan + ' cá nhân');
+        if (r.thanhTichCN > 0) chiTiet.push(r.thanhTichCN + ' dòng thành tích cá nhân');
+        if (r.thanhTichTT > 0) chiTiet.push(r.thanhTichTT + ' dòng thành tích tập thể');
+        document.getElementById('sample-data-banner').innerHTML =
+          '<div class="sample-banner">⚠️ Hệ thống còn <b>' + chiTiet.join(', ') +
+          '</b> gắn nhãn "Dữ liệu mẫu" — có thể làm sai lệch số liệu thống kê. ' +
+          'Kiểm tra sheet CaNhan/ThanhTichCaNhan/ThanhTichTapThe (cột GhiChu), gỡ nhãn khỏi dữ liệu thật (nếu có) rồi chạy hàm clearSampleData().</div>';
+      }
+    }).withFailureHandler(function () {}).apiCheckSampleData();
+  }
+
+  // ====== KHỞI ĐỘNG ======
+  // Trước đây CURRENT_USER/COMPLETION_LEVELS/... có sẵn ngay (do server nhúng qua scriptlet
+  // lúc render trang). Giờ trang là file tĩnh, phải gọi apiGetBootstrap() qua fetch() trước,
+  // có kết quả rồi mới render — nếu không PAGES/nhãn danh hiệu sẽ rỗng lúc mới mở trang.
+  function khoiDongUngDung() {
+    var box = document.getElementById('app-content');
+    if (box) box.innerHTML = '<p style="color:#888;font-size:13px">Đang tải cấu hình hệ thống...</p>';
+    google.script.run.withSuccessHandler(function (bs) {
+      CURRENT_USER = bs.user || CURRENT_USER;
+      COMPLETION_LEVELS = bs.completionLevels || [];
+      DANHHIEU_CN_GROUPS = bs.danhHieuCnGroups || [];
+      DANHHIEU_TT_GROUPS = bs.danhHieuTtGroups || [];
+      NOI_BAN_HANH = bs.noiBanHanh || [];
+      PHAM_VI = bs.phamVi || [];
+      rebuildAccessState();
+      goTo(trangMacDinh());
+      checkSampleDataBanner();
+    }).withFailureHandler(function (err) {
+      if (box) box.innerHTML = '<div class="msg error">Không kết nối được tới máy chủ Apps Script. ' +
+        'Kiểm tra lại APPS_SCRIPT_URL trong Index.html và trạng thái Deploy. Chi tiết: ' + esc(err.message || err) + '</div>';
+    }).apiGetBootstrap();
+  }
+  khoiDongUngDung();
+</script>
+</body>
+</html>
