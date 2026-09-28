@@ -477,6 +477,20 @@ function apiCheckSampleData() {
 // Trả về thông tin file Sheet mà bản Web App đang chạy này thực sự đang đọc/ghi —
 // dùng để đối chiếu với URL Sheet đang mở trên trình duyệt, phát hiện trường hợp
 // đang thao tác nhầm 2 bản Sheet/2 project Apps Script khác nhau.
+// Gói toàn bộ dữ liệu "khởi động" mà giao diện cần ngay khi mở trang — trước đây
+// được nhúng sẵn vào HTML qua templating GAS (<?!= ... ?>), nay giao diện chạy
+// tách rời (Cloudflare Pages) nên phải gọi 1 API để lấy về qua fetch().
+function apiGetBootstrap() {
+  return {
+    user: getCurrentUser(),
+    completionLevels: COMPLETION_LEVELS,
+    danhHieuCnGroups: DANHHIEU_CN_GROUPS,
+    danhHieuTtGroups: DANHHIEU_TT_GROUPS,
+    noiBanHanh: NOI_BAN_HANH,
+    phamVi: PHAM_VI
+  };
+}
+
 function apiGetSystemInfo() {
   const ss = SpreadsheetApp.getActive();
   return {
@@ -630,6 +644,7 @@ const DANH_SACH_HAM_CHO_PHEP_ = {
   apiAdminLogout: apiAdminLogout,
   apiCheckSampleData: apiCheckSampleData,
   apiGetSystemInfo: apiGetSystemInfo,
+  apiGetBootstrap: apiGetBootstrap,
   apiGetDonViList: apiGetDonViList,
   apiAddDonVi: apiAddDonVi,
   apiUpdateDonVi: apiUpdateDonVi,
